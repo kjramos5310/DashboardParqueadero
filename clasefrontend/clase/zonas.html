@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zonas y Espacios - Parking</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] } } } }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fade .25s ease; }
+        @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    </style>
+</head>
+
+<body class="bg-[#0f172a] text-slate-100 min-h-screen antialiased overflow-x-hidden">
+    <div class="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-blue-600/10 via-purple-600/5 to-transparent pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-4 py-8 relative z-10">
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 mb-8 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🅿️</span>
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-200 to-purple-400 bg-clip-text text-transparent">
+                        Zonas y Espacios
+                    </h1>
+                    <p class="text-slate-400 text-sm mt-1">Haz clic en una zona para ver sus espacios y estados en tiempo real.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 bg-slate-900/50 backdrop-blur-md p-4 rounded-xl border border-slate-800">
+                <a href="dashboard.html" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300">← Dashboard de espacios</a>
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span id="ssePulse" class="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-0"></span>
+                        <span id="sseDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                    <span id="sseText" class="text-xs font-medium text-slate-300">Desconectado</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="zonasContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div class="text-slate-500 italic col-span-full py-12 text-center">Cargando zonas...</div>
+        </div>
+    </div>
+
+    <!-- Modal de detalle de zona -->
+    <div id="modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div class="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col fade-in">
+            <header class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                <div>
+                    <h2 id="modalTitulo" class="text-xl font-bold text-slate-100">Zona</h2>
+                    <p id="modalSub" class="text-xs text-slate-400 mt-0.5"></p>
+                </div>
+                <button id="modalClose" class="text-slate-400 hover:text-red-400 text-2xl leading-none cursor-pointer">&times;</button>
+            </header>
+            <div id="modalEspacios" class="p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+        </div>
+    </div>
+
+    <script src="zonas.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,31 @@
+name: Git Flow Enforcer
+
+on:
+  pull_request:
+    branches:
+      - main
+      - test
+
+jobs:
+  enforce-branch-flow:
+    name: Validar Flujo de Ramas Autorizadas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Branch Flow
+        run: |
+          target_branch="${{ github.base_ref }}"
+          source_branch="${{ github.head_ref }}"
+          echo "Base Ref (Destino): $target_branch"
+          echo "Head Ref (Origen): $source_branch"
+          
+          if [ "$target_branch" = "main" ] && [ "$source_branch" != "test" ]; then
+            echo "::error::Flujo no autorizado. Los merges directos a 'main' solo se permiten desde la rama 'test'."
+            exit 1
+          fi
+          
+          if [ "$target_branch" = "test" ] && [ "$source_branch" != "dev" ]; then
+            echo "::error::Flujo no autorizado. Los merges directos a 'test' solo se permiten desde la rama 'dev'."
+            exit 1
+          fi
+          
+          echo "Validación de flujo exitosa. El PR cumple con las reglas de ramas (dev -> test -> main)."

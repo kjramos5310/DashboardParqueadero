@@ -1,0 +1,18 @@
+{
+  "name": "proyecto-parqueadero-nestjs-workspace",
+  "version": "1.0.0",
+  "description": "Workspace de npm para los microservicios en NestJS (Vehículos y Tickets)",
+  "private": true,
+  "workspaces": [
+    "App/ms-vehiculos",
+    "App/ms-tickets"
+  ],
+  "scripts": {
+    "build:vehiculos": "npm run build --workspace=App/ms-vehiculos",
+    "build:tickets": "npm run build --workspace=App/ms-tickets",
+    "start:vehiculos": "npm run start:dev --workspace=App/ms-vehiculos",
+    "start:tickets": "npm run start:dev --workspace=App/ms-tickets",
+    "test:vehiculos": "npm run test --workspace=App/ms-vehiculos",
+    "test:tickets": "npm run test --workspace=App/ms-tickets"
+  }
+}

@@ -1,0 +1,224 @@
+services:
+  # ---------------- Infraestructura ----------------
+
+  # PostgreSQL: una BD por microservicio (usuarios, vehiculos, tickets, audith)
+  postgres:
+    image: postgres:15-alpine
+    container_name: parking-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./App/db/postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - parking-network
+
+  # MySQL: BD de zonas-espacios
+  mysql:
+    image: mysql:8.0
+    container_name: parking-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db_zonas_espacios
+      MYSQL_USER: espe_user
+      MYSQL_PASSWORD: espe_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - parking-network
+
+  # RabbitMQ: bus de auditoria (publicador ms-usuarios -> consumidor ms-audith)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: parking-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - parking-network
+
+  # ---------------- Microservicios ----------------
+
+  # ms-usuarios-roles-auth (Spring Boot) -> Postgres + RabbitMQ
+  ms-usuarios:
+    build:
+      context: ./App/ms-usuarios-roles-auth
+    container_name: ms-usuarios
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/usuarios_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  # ms-zonas-espacios (Spring Boot) -> MySQL
+  ms-zonas:
+    build:
+      context: ./App/ms-zonas-espacios
+    container_name: ms-zonas
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/db_zonas_espacios?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+      SPRING_DATASOURCE_USERNAME: espe_user
+      SPRING_DATASOURCE_PASSWORD: espe_password
+    ports:
+      - "8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  # ms-vehiculos (NestJS) -> Postgres
+  ms-vehiculos:
+    build:
+      context: ./App/ms-vehiculos
+    container_name: ms-vehiculos
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USUARIO: postgres
+      DB_CONTRASENA: postgres
+      DB_NOMBRE: vehiculos_db
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+      RABBITMQ_EXCHANGE: audit_exchange
+      RABBITMQ_ROUTING_KEY: audit_routing_key
+    ports:
+      - "3001:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  # ms-tickets (NestJS) -> Postgres
+  ms-tickets:
+    build:
+      context: ./App/ms-tickets
+    container_name: ms-tickets
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USUARIO: postgres
+      DB_CONTRASENA: postgres
+      DB_NOMBRE: tickets_db
+      # Comunicacion entre servicios (por nombre de servicio en la red de compose)
+      MS_PERSONAS: http://ms-usuarios:8080/api/personas
+      MS_ESPACIOS: http://ms-zonas:8082/api/espacios
+      MS_VEHICULOS: http://ms-vehiculos:3000/vehiculos/placa
+      MS_AUTH_LOGIN: http://ms-usuarios:8080/api/auth/login
+      SERVICE_USER: admin
+      SERVICE_PASSWORD: admin123
+      TARIFA_HORA: "1.0"
+    ports:
+      - "3002:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ms-usuarios:
+        condition: service_started
+      ms-zonas:
+        condition: service_started
+      ms-vehiculos:
+        condition: service_started
+    networks:
+      - parking-network
+
+  # ms-audith (NestJS) -> Postgres + RabbitMQ
+  ms-audith:
+    build:
+      context: ./App/ms-audith
+    container_name: ms-audith
+    environment:
+      PORT: 3004
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: db_audit
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: admin
+      RABBITMQ_PASSWORD: admin123
+      RABBITMQ_QUEUE: audit_queue
+      RABBITMQ_EXCHANGE: audit_exchange
+      RABBITMQ_ROUTING_KEY: audit_routing_key
+      THROTTLE_TTL: 60000
+      THROTTLE_LIMIT: 100
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - parking-network
+
+  # ---------------- Frontend ----------------
+
+  # Frontend estatico (nginx). El navegador llama a los micros por los
+  # puertos publicados en el host (localhost:8082, localhost:3002, ...).
+  frontend:
+    build:
+      context: ./clasefrontend
+    container_name: parking-frontend
+    ports:
+      - "5500:80"
+    depends_on:
+      - ms-zonas
+      - ms-tickets
+    networks:
+      - parking-network
+
+networks:
+  parking-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mysql_data:
+  rabbitmq_data:
